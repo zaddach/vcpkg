@@ -1,0 +1,204 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index ba458e74d..529f28758 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.15)
+ 
+ project(Kuzu VERSION 0.8.2 LANGUAGES CXX C)
+ 
++option(ENABLE_SHARED "Build shared library" TRUE)
++option(ENABLE_STATIC "Build static library" TRUE)
+ option(SINGLE_THREADED "Single-threaded mode" FALSE)
+ if(SINGLE_THREADED)
+     set(__SINGLE_THREADED__ TRUE)
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index dffdb10ce..0a3df9368 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -20,8 +20,12 @@ add_subdirectory(storage)
+ add_subdirectory(transaction)
+ add_subdirectory(extension)
+ 
+-add_library(kuzu STATIC ${ALL_OBJECT_FILES})
+-add_library(kuzu_shared SHARED ${ALL_OBJECT_FILES})
++if( ENABLE_STATIC )
++	add_library(kuzu STATIC ${ALL_OBJECT_FILES})
++endif()
++if( ENABLE_SHARED )
++	add_library(kuzu_shared SHARED ${ALL_OBJECT_FILES})
++endif()
+ 
+ set(KUZU_LIBRARIES antlr4_cypher antlr4_runtime brotlidec brotlicommon fast_float utf8proc re2 fastpfor parquet snappy thrift zstd miniz mbedtls lz4 roaring_bitmap)
+ if (NOT __SINGLE_THREADED__)
+@@ -38,25 +42,38 @@ endif()
+ if (ENABLE_BACKTRACES)
+         set(KUZU_LIBRARIES ${KUZU_LIBRARIES} cpptrace::cpptrace)
+ endif()
+-target_link_libraries(kuzu PUBLIC ${KUZU_LIBRARIES})
+-target_link_libraries(kuzu_shared PUBLIC ${KUZU_LIBRARIES})
++if( ENABLE_STATIC )
++	target_link_libraries(kuzu PUBLIC ${KUZU_LIBRARIES})
++endif()
++if( ENABLE_SHARED )
++	target_link_libraries(kuzu_shared PUBLIC ${KUZU_LIBRARIES})
++endif()
+ unset(KUZU_LIBRARIES)
+ 
+ set(KUZU_INCLUDES $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include/c_api)
+-target_include_directories(kuzu PUBLIC ${KUZU_INCLUDES})
+-target_include_directories(kuzu_shared PUBLIC ${KUZU_INCLUDES})
++if( ENABLE_STATIC )
++	target_include_directories(kuzu PUBLIC ${KUZU_INCLUDES})
++endif()
++if( ENABLE_SHARED )
++	target_include_directories(kuzu_shared PUBLIC ${KUZU_INCLUDES})
++endif()
+ unset(KUZU_INCLUDES)
+ 
+-if(WIN32)
++if(WIN32 AND ENABLE_STATIC )
+         # Anything linking against the static library must not use dllimport.
+         target_compile_definitions(kuzu INTERFACE KUZU_STATIC_DEFINE)
+ endif()
+ 
+-if(NOT WIN32)
++if(NOT WIN32 AND ENABLE_SHARED )
+         set_target_properties(kuzu_shared PROPERTIES OUTPUT_NAME kuzu)
+ endif()
+ 
+-install(TARGETS kuzu kuzu_shared)
++if( ENABLE_STATIC )
++	install(TARGETS kuzu)
++endif()
++if( ENABLE_SHARED )
++	install(TARGETS kuzu_shared)
++endif()
+ 
+ if(${BUILD_SINGLE_FILE_HEADER})
+         # Create a command to generate kuzu.hpp, and then create a target that is
+@@ -68,7 +85,7 @@ if(${BUILD_SINGLE_FILE_HEADER})
+                 COMMAND
+                         ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/collect-single-file-header.py ${CMAKE_CURRENT_BINARY_DIR}/..
+                 DEPENDS
+-                        ${PROJECT_SOURCE_DIR}/scripts/collect-single-file-header.py kuzu_shared)
++                        ${PROJECT_SOURCE_DIR}/scripts/collect-single-file-header.py)
+         add_custom_target(single_file_header ALL DEPENDS kuzu.hpp)
+ endif()
+ 
+diff --git a/tools/rust_api/Cargo.toml b/tools/rust_api/Cargo.toml
+index d0a728a24..c3001a066 100644
+--- a/tools/rust_api/Cargo.toml
++++ b/tools/rust_api/Cargo.toml
+@@ -37,6 +37,7 @@ cxx-build = "1.0"
+ num_cpus = "1.0"
+ cmake = "0.1"
+ rustversion = "1"
++vcpkg = "0.2.15"
+ 
+ [dev-dependencies]
+ tempfile = "3"
+diff --git a/tools/rust_api/build.rs b/tools/rust_api/build.rs
+index e296822a8..88078a60b 100644
+--- a/tools/rust_api/build.rs
++++ b/tools/rust_api/build.rs
+@@ -1,7 +1,7 @@
+ use std::env;
+ use std::path::{Path, PathBuf};
+ 
+-fn link_mode() -> &'static str {
++fn get_link_mode() -> &'static str {
+     if env::var("KUZU_SHARED").is_ok() {
+         "dylib"
+     } else {
+@@ -13,12 +13,12 @@ fn get_target() -> String {
+     env::var("PROFILE").unwrap()
+ }
+ 
+-fn link_libraries() {
+-    if cfg!(windows) && link_mode() == "dylib" {
++fn link_libraries(link_mode: &str) {
++    if cfg!(windows) && link_mode == "dylib" {
+         println!("cargo:rustc-link-lib=dylib=kuzu_shared");
+     } else {
+-        if link_mode() == "dylib" {
+-            println!("cargo:rustc-link-lib={}=kuzu", link_mode());
++        if link_mode == "dylib" {
++            println!("cargo:rustc-link-lib={}=kuzu", link_mode);
+         } else {
+             if rustversion::cfg!(since(1.82)) {
+                 println!("cargo:rustc-link-lib=static:+whole-archive=kuzu");
+@@ -27,7 +27,7 @@ fn link_libraries() {
+             }
+         }
+     }
+-    if link_mode() == "static" {
++    if link_mode == "static" {
+         if cfg!(windows) {
+             println!("cargo:rustc-link-lib=dylib=msvcrt");
+             println!("cargo:rustc-link-lib=dylib=shell32");
+@@ -144,6 +144,7 @@ fn build_ffi(
+     source_file: &str,
+     bundled: bool,
+     include_paths: &Vec<PathBuf>,
++    link_mode: &str,
+ ) {
+     let mut build = cxx_build::bridge(bridge_file);
+     build.file(source_file);
+@@ -154,7 +155,7 @@ fn build_ffi(
+     if get_target() == "debug" || get_target() == "relwithdebinfo" {
+         build.define("ENABLE_RUNTIME_CHECKS", "1");
+     }
+-    if link_mode() == "static" {
++    if link_mode == "static" {
+         build.define("KUZU_STATIC_DEFINE", None);
+     }
+ 
+@@ -191,6 +192,7 @@ fn main() {
+     let mut bundled = false;
+     let mut include_paths =
+         vec![Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("include")];
++    let link_mode: &str;
+ 
+     if let (Ok(kuzu_lib_dir), Ok(kuzu_include)) =
+         (env::var("KUZU_LIBRARY_DIR"), env::var("KUZU_INCLUDE_DIR"))
+@@ -199,12 +201,17 @@ fn main() {
+         // Also add to environment used by cargo run and tests
+         println!("cargo:rustc-env=LD_LIBRARY_PATH={}", kuzu_lib_dir);
+         include_paths.push(Path::new(&kuzu_include).to_path_buf());
++        link_mode = get_link_mode();
++    } else if let Ok(library) = vcpkg::Config::new().emit_includes(false).find_package("kuzu") {
++        include_paths.extend(library.include_paths);
++        link_mode = if library.is_static {"static"} else {"dylib"};
+     } else {
+         include_paths.extend(build_bundled_cmake().expect("Bundled build failed!"));
+         bundled = true;
++        link_mode = get_link_mode();
+     }
+-    if link_mode() == "static" {
+-        link_libraries();
++    if link_mode == "static" {
++        link_libraries(link_mode);
+     }
+     build_ffi(
+         "src/ffi.rs",
+@@ -212,6 +219,7 @@ fn main() {
+         "src/kuzu_rs.cpp",
+         bundled,
+         &include_paths,
++        link_mode,
+     );
+ 
+     if cfg!(feature = "arrow") {
+@@ -221,9 +229,10 @@ fn main() {
+             "src/kuzu_arrow.cpp",
+             bundled,
+             &include_paths,
++            link_mode,
+         );
+     }
+-    if link_mode() == "dylib" {
+-        link_libraries();
++    if link_mode == "dylib" {
++        link_libraries(link_mode);
+     }
+ }

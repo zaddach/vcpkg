@@ -4220,6 +4220,10 @@
       "baseline": "2.1.0",
       "port-version": 0
     },
+    "kuzu": {
+      "baseline": "0.8.2",
+      "port-version": 0
+    },
     "kvasir-mpl": {
       "baseline": "2019-08-06",
       "port-version": 3

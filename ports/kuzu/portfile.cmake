@@ -1,0 +1,49 @@
+vcpkg_from_github(
+  OUT_SOURCE_PATH SOURCE_PATH
+  REPO kuzudb/kuzu
+  REF v0.8.2
+  SHA512 60b22daa448e653afd5e3081e2557b3b553134dbd50ce13ac24308daf3a871b0abf2339b7c70f0866843cfb4090ffc107f30fe3d3ad07382d5f193e3354f3979
+  HEAD_REF master
+  PATCHES
+    "0001-vcpkg.patch"
+)
+
+if( shell IN_LIST FEATURES )
+  set(BUILD_SHELL ON)
+else()
+  set(BUILD_SHELL OFF)
+endif()
+
+if( backtrace IN_LIST FEATURES )
+  set(ENABLE_BACKTRACES ON)
+else()
+  set(ENABLE_BACKTRACES OFF)
+endif()
+
+if( single-threaded IN_LIST FEATURES )
+  set(SINGLE_THREADED ON)
+else()
+  set(SINGLE_THREADED OFF)
+endif()
+
+string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" BUILD_STATIC)
+string(COMPARE NOTEQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" BUILD_SHARED)
+
+
+vcpkg_cmake_configure(
+  SOURCE_PATH "${SOURCE_PATH}"
+  OPTIONS
+    -DBUILD_SHELL=${BUILD_SHELL}
+    -DENABLE_BACKTRACES=${ENABLE_BACKTRACES}
+    -DSINGLE_THREADED=${SINGLE_THREADED}
+    -DENABLE_STATIC=${BUILD_STATIC}
+    -DENABLE_SHARED=${BUILD_SHARED}
+)
+
+vcpkg_cmake_install()
+
+# Handle copyright
+file(INSTALL "${SOURCE_PATH}/LICENSE" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+
+vcpkg_copy_pdbs()

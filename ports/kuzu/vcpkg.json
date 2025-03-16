@@ -1,0 +1,47 @@
+{
+  "name": "kuzu",
+  "version-semver": "0.8.2",
+  "description": "Kuzu is an embedded graph database built for query speed and scalability.",
+  "homepage": "https://kuzudb.com/",
+  "license": "MIT",
+  "supports": "!uwp",
+  "dependencies": [
+    {
+      "name": "python3",
+      "version>=": "3.9"
+    },
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    { "name": "utf8proc" },
+    { "name": "antlr4" },
+    { "name": "re2" },
+    { "name": "parquet" },
+    { "name": "thrift" },
+    { "name": "snappy" },
+    { "name": "zstd" },
+    { "name": "miniz" },
+    { "name": "mbedtls" },
+    { "name": "brotli" },
+    { "name": "lz4" },
+    { "name": "roaring" }
+  ],
+  "features": {
+    "backtrace": {
+      "description": "Enable backtrace printing for exceptions and segfaults",
+      "dependencies": [
+        {
+          "name": "cpptrace",
+          "version>=": "0.8.1"
+        }
+      ]
+    },
+    "shell": {
+      "description": "Build Interactive Shell"
+    },
+    "single-threaded": {
+      "description": "Single-threaded mode"
+    }
+  }
+}
