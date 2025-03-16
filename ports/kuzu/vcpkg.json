@@ -6,26 +6,26 @@
   "license": "MIT",
   "supports": "!uwp",
   "dependencies": [
+    "antlr4",
+    "brotli",
+    "lz4",
+    "mbedtls",
+    "miniz",
+    "parquet",
     {
       "name": "python3",
       "version>=": "3.9"
     },
+    "re2",
+    "roaring",
+    "snappy",
+    "thrift",
+    "utf8proc",
     {
       "name": "vcpkg-cmake",
       "host": true
     },
-    { "name": "utf8proc" },
-    { "name": "antlr4" },
-    { "name": "re2" },
-    { "name": "parquet" },
-    { "name": "thrift" },
-    { "name": "snappy" },
-    { "name": "zstd" },
-    { "name": "miniz" },
-    { "name": "mbedtls" },
-    { "name": "brotli" },
-    { "name": "lz4" },
-    { "name": "roaring" }
+    "zstd"
   ],
   "features": {
     "backtrace": {
